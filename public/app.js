@@ -1,5 +1,6 @@
 import {createTripRepository} from '/storage.js';
 import {arrivalMessage} from '/arrival-display.js';
+import {searchRoutes} from '/route-search.js';
 const repository=createTripRepository({getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v),removeItem:k=>localStorage.removeItem(k)});
 let activeTripId=null;const searchVersions={origin:0,destination:0};
 const $=id=>document.getElementById(id);
@@ -69,7 +70,7 @@ window.addEventListener('storage',()=>{renderSaved().catch(()=>message('저장 �
 $('routes').onclick=async()=>{
   if(!state.origin||!state.destination)return;stopLive();const current=++routeVersion;$('routes').disabled=true;$('route-list').replaceChildren();$('detail').replaceChildren();message('대중교통 경로를 조회하고 있습니다.');
   try{
-    const data=await get('/api/routes?'+new URLSearchParams({sx:state.origin.x,sy:state.origin.y,ex:state.destination.x,ey:state.destination.y}));if(current!==routeVersion)return;
+    const data=await searchRoutes({sx:state.origin.x,sy:state.origin.y,ex:state.destination.x,ey:state.destination.y});if(current!==routeVersion)return;
     for(const route of data.routes){const card=text('article','');card.className='route';card.append(text('strong',(route.isOptimal?'최적 · ':'')+duration(route.minutes)),text('p',`버스 ${route.busCount}회 · 지하철 ${route.subwayCount}회 · 도보 ${duration(route.walkMinutes)}`),text('p',`예상 요금 ${route.fare??'—'}원`),text('p',route.segments.map(s=>s.type===3?'도보':s.lines.join(' / ')||'대중교통').join(' → ')));const button=text('button','이 경로 자세히 보기');button.onclick=()=>{
       stopLive();$('detail').replaceChildren(text('h2','선택한 경로'),text('p',`버스 ${route.busCount}회 · 지하철 ${route.subwayCount}회 · 총 도보 ${duration(route.walkMinutes)}`));const list=document.createElement('ol');for(const s of route.segments)list.append(text('li',s.type===3?`도보 ${duration(s.minutes)}`:`${s.lines.join(' / ')} · ${s.start} → ${s.end} · ${s.stops??'—'}개 구간 / ${duration(s.minutes)}`));$('detail').append(list);showArrivals(route);$('detail').scrollIntoView({behavior:'smooth'});
     };card.append(button);$('route-list').append(card);}
