@@ -1,0 +1,1 @@
+{"name":"commute-pilot","private":true,"type":"module","scripts":{"start":"node --env-file-if-exists=.env server.mjs","check":"node --check server.mjs && node --check public/app.js"}}
