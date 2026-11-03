@@ -1,6 +1,7 @@
 import {arrivalTargets,createArrivalService} from './arrivals.mjs';
 import {summarizeRoutes} from './routes.mjs';
 import {createRouteTokens} from './route-token.mjs';
+import {odsayError} from './odsay-errors.mjs';
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
@@ -15,7 +16,7 @@ async function upstream(url,headers={}) {
   if(!response.ok) throw new ApiError(502,`외부 API 요청이 거절되었습니다 (${response.status}). 키·권한·허용 IP·호출 한도를 확인하세요.`);
   return response.json();
 }
-function key(name){const value=process.env[name];if(!value)throw new ApiError(503,`${name} 설정이 필요합니다. .env 파일을 확인하고 서버를 다시 실행하세요.`);return value;}
+function key(name){const value=process.env[name]?.trim();if(!value)throw new ApiError(503,`${name} 설정이 필요합니다. 서버 환경변수를 확인하고 다시 실행 또는 배포하세요.`);return value;}
 function coord(value,min,max){const number=Number(value);if(value===null||value.trim()===''||!Number.isFinite(number)||number<min||number>max)throw new ApiError(400,'선택한 장소의 좌표가 올바르지 않습니다.');return number;}
 function routeTokens(){return createRouteTokens({secret:process.env.ROUTE_TOKEN_SECRET||key('ODSAY_API_KEY')});}
 export async function api(url){
@@ -44,7 +45,8 @@ export async function api(url){
     const params={SX:coord(url.searchParams.get('sx'),-180,180),SY:coord(url.searchParams.get('sy'),-90,90),EX:coord(url.searchParams.get('ex'),-180,180),EY:coord(url.searchParams.get('ey'),-90,90),apiKey:key('ODSAY_API_KEY')};
     const endpoint=new URL('https://api.odsay.com/v1/api/searchPubTransPathT');endpoint.search=new URLSearchParams(params).toString();
     const data=await upstream(endpoint);
-    if(data.error)throw new ApiError(502,`경로를 가져오지 못했습니다. ODsay 오류 코드: ${String(data.error.code||'미상')}`);
+    const failure=odsayError(data);
+    if(failure){console.warn('Route provider rejected request',JSON.stringify({code:failure.code,reason:failure.reason}));throw new ApiError(502,failure.message);}
     const codec=routeTokens();
     const tokens=(data.result?.path||[]).map(p=>codec.issue((p.subPath||[]).map((s,index)=>({index,start:s.startName,end:s.endName,type:s.trafficType,items:arrivalTargets(s)})).filter(g=>g.type!==3)));
     return {routes:summarizeRoutes(data.result?.path||[],tokens),fetchedAt:new Date().toISOString()};
